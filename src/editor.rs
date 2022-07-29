@@ -44,11 +44,19 @@ impl Editor {
     }
 
     pub fn select(&mut self) {
-        self.apply(Change::Select)
+        if let Some(buf) = self.cur_buf() {
+            if buf.selection_start().is_none() {
+                self.apply(Change::Select)
+            }
+        }
     }
 
     pub fn unselect(&mut self) {
-        self.apply(Change::Unselect)
+        if let Some(buf) = self.cur_buf() {
+            if buf.selection_start().is_some() {
+                self.apply(Change::Unselect)
+            }
+        }
     }
 
     pub fn insert(&mut self, text: impl ToString) {

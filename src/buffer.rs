@@ -81,6 +81,11 @@ impl Buffer {
                     (selected_row, selected_col),
                     (self.cursor_row, self.cursor_col),
                 ))
+            } else if selected_row == self.cursor_row && selected_col < self.cursor_col {
+                Some((
+                    (self.cursor_row, selected_col),
+                    (selected_row, self.cursor_col),
+                ))
             } else {
                 Some((
                     (self.cursor_row, self.cursor_col),

@@ -4,7 +4,7 @@ use crossterm::{
     cursor::position,
     event::{poll, read, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
-    style::{Print, },
+    style::{Print, SetBackgroundColor, Color, ResetColor},
     cursor::MoveTo,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
@@ -13,7 +13,8 @@ use std::io::stdout;
 
 struct Terminal {
     screen_start_row: usize, // the starting row to be displayed
-    screen_rows: usize,    // the number of rows to be displayed
+    screen_cols: usize,      // the number of columns to be displayed
+    screen_rows: usize,      // the number of rows to be displayed
 }
 
 impl Default for Terminal {
@@ -21,6 +22,7 @@ impl Default for Terminal {
         enable_raw_mode();
         Self {
             screen_start_row: 0,
+            screen_cols: 80,
             screen_rows: 24,
         }
     }
@@ -46,8 +48,34 @@ impl Frontend for Terminal {
             execute!(stdout(), Clear(ClearType::All), MoveTo(0, 0)).unwrap();
 
             let width = (self.screen_start_row + self.screen_rows).to_string().len();
-            for (i, line) in buf.get_lines(self.screen_start_row, self.screen_start_row + self.screen_rows).iter().enumerate() {
-                execute!(stdout(), MoveTo(0, i as u16), Print(format!("{:<width$?} {}", self.screen_start_row + i + 1, line))).unwrap();
+
+            if let Some((start_select, end_select)) = buf.selection_range() {
+                let (start_row, start_col) = start_select;
+                let (end_row, end_col) = end_select;
+                for (i, line) in buf.get_lines(self.screen_start_row, self.screen_start_row + self.screen_rows).iter().enumerate() {
+                    let max_len = std::cmp::min(line.len(), self.screen_cols - width - 1);
+                    execute!(stdout(), MoveTo(0, i as u16), Print(format!("{:<width$?} {}", self.screen_start_row + i + 1, &line[..max_len]))).unwrap();
+
+                    let row = i + self.screen_start_row;
+                    if start_row <= row && row <= end_row {
+                        let mut line = line.clone();
+                        let mut start = width + 1;
+                        if end_row == row {
+                            line = line[..end_col].to_string();
+                        }
+                        if start_row == row {
+                            start += start_col;
+                            line = line[start_col..].to_string();
+                        }
+                        let max_len = std::cmp::min(line.len(), self.screen_cols - width - 1);
+                        execute!(stdout(), SetBackgroundColor(Color::White), MoveTo(start as u16, i as u16), Print(if line.is_empty() { " " } else { &line[..max_len] }), ResetColor).unwrap();
+                    }
+                }
+            } else {
+                for (i, line) in buf.get_lines(self.screen_start_row, self.screen_start_row + self.screen_rows).iter().enumerate() {
+                    let max_len = std::cmp::min(line.len(), self.screen_cols - width - 1);
+                    execute!(stdout(), MoveTo(0, i as u16), Print(format!("{:<width$?} {}", self.screen_start_row + i + 1, &line[..max_len]))).unwrap();
+                }
             }
 
             execute!(stdout(), MoveTo((cur_col + width + 1) as u16, (cur_row - self.screen_start_row) as u16)).unwrap();
@@ -58,36 +86,44 @@ impl Frontend for Terminal {
     fn set_status(&mut self, status: &str) -> Result<(), String> {
         Ok(())
     }
-    fn wait_for_input(&mut self) -> Result<Input, String> {
+    fn wait_for_input(&mut self, editor: &Editor) -> Result<Input, String> {
         loop {
             // Wait up to 1s for another event
             if poll(std::time::Duration::from_millis(1_000)).is_ok() {
                 // It's guaranteed that read() won't block if `poll` returns `Ok(true)`
                 if let Ok(event) = read() {
-                    if let Event::Key(key_event) = event {
-                        let mut result = match key_event.code {
-                            KeyCode::Backspace => Input::Backspace,
-                            KeyCode::Delete => Input::Delete,
-                            KeyCode::Left => Input::Left,
-                            KeyCode::Right => Input::Right,
-                            KeyCode::Up => Input::Up,
-                            KeyCode::Down => Input::Down,
-                            KeyCode::Enter => Input::Enter,
-                            KeyCode::Tab => Input::Tab,
-    
-                            KeyCode::Char(ch) => Input::Char(ch),
-                            _ => continue,
-                        };
-                        if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                            result = Input::Shift(Box::new(result));
+                    match event {
+                        Event::Key(key_event) => {
+                            let mut result = match key_event.code {
+                                KeyCode::Backspace => Input::Backspace,
+                                KeyCode::Delete => Input::Delete,
+                                KeyCode::Left => Input::Left,
+                                KeyCode::Right => Input::Right,
+                                KeyCode::Up => Input::Up,
+                                KeyCode::Down => Input::Down,
+                                KeyCode::Enter => Input::Enter,
+                                KeyCode::Tab => Input::Tab,
+        
+                                KeyCode::Char(ch) => Input::Char(ch),
+                                _ => continue,
+                            };
+                            if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                                result = Input::Shift(Box::new(result));
+                            }
+                            if key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                                result = Input::Control(Box::new(result));
+                            }
+                            if key_event.modifiers.contains(KeyModifiers::ALT) {
+                                result = Input::Alt(Box::new(result));
+                            }
+                            return Ok(result)
                         }
-                        if key_event.modifiers.contains(KeyModifiers::CONTROL) {
-                            result = Input::Control(Box::new(result));
+                        Event::Mouse(_) => {}
+                        Event::Resize(cols, rows) => {
+                            self.screen_cols = cols as usize;
+                            self.screen_rows = rows as usize;
+                            self.render(editor)?;
                         }
-                        if key_event.modifiers.contains(KeyModifiers::ALT) {
-                            result = Input::Alt(Box::new(result));
-                        }
-                        return Ok(result)
                     }
                 }
             }
@@ -155,20 +191,42 @@ fn main() -> Result<(), Expr> {
     // }"#)?));
 
     let mut frontend = Terminal::default();
+    let mut selected = false;
+    let mut copied = String::new();
     loop {
         frontend.render(&editor);
 
-        let input = frontend.wait_for_input();
+        let input = frontend.wait_for_input(&editor);
         if Ok(Input::Control(Box::new(Input::Char('q')))) == input {
             break;
         } else {
             match input {
                 Ok(Input::Shift(shift)) => {
-                    if let Input::Char(ch) = *shift {
-                        editor.insert(ch.to_uppercase());
+                    match *shift {
+                        Input::Char(ch) => {
+                            selected = false;
+                            editor.unselect();
+                            editor.insert(ch.to_uppercase())
+                        },
+                        Input::Left | Input::Right | Input::Up | Input::Down => {
+                            if !selected {
+                                editor.select();
+                                selected = true;
+                            }
+                            match *shift {
+                                Input::Left => editor.move_cur(Direction::Left),
+                                Input::Right => editor.move_cur(Direction::Right),
+                                Input::Up => editor.move_cur(Direction::Up),
+                                Input::Down => editor.move_cur(Direction::Down),
+                                _ => {}
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 Ok(Input::Char(ch)) => {
+                    selected = false;
+                    editor.unselect();
                     editor.insert(ch);
                 }
 
@@ -179,34 +237,54 @@ fn main() -> Result<(), Expr> {
                         editor.redo();
                     } else if *ctrl == Input::Char('y') {
                         editor.redo();
+                    } else if *ctrl == Input::Char('c') {
+                        if let Some(selected) = editor.get_selected() {
+                            copied = selected.clone();
+                        }
+                    } else if *ctrl == Input::Char('v') {
+                        editor.insert(&copied);
                     }
                 }
 
                 Ok(Input::Enter) => {
+                    selected = false;
+                    editor.unselect();
                     editor.insert('\n');
                 }
 
                 Ok(Input::Tab) => {
+                    selected = false;
+                    editor.unselect();
                     editor.insert("    ");
                 }
 
                 Ok(Input::Backspace) => {
+                    selected = false;
+                    editor.unselect();
                     editor.delete(1);
                 }
 
                 Ok(Input::Left) => {
+                    selected = false;
+                    editor.unselect();
                     editor.move_cur(Direction::Left);
                 }
 
                 Ok(Input::Right) => {
+                    selected = false;
+                    editor.unselect();
                     editor.move_cur(Direction::Right);
                 }
 
                 Ok(Input::Up) => {
+                    selected = false;
+                    editor.unselect();
                     editor.move_cur(Direction::Up);
                 }
                 
                 Ok(Input::Down) => {
+                    selected = false;
+                    editor.unselect();
                     editor.move_cur(Direction::Down);
                 }
 

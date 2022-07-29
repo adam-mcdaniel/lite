@@ -2,7 +2,7 @@ use super::Editor;
 
 pub trait Frontend {
     fn render(&mut self, editor: &Editor) -> Result<(), String>;
-    fn wait_for_input(&mut self) -> Result<Input, String>;
+    fn wait_for_input(&mut self, editor: &Editor) -> Result<Input, String>;
     fn set_status(&mut self, status: &str) -> Result<(), String>;
 
     fn prompt(&mut self, text: &str) -> Result<String, String>;
