@@ -1,0 +1,79 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+keyword = {
+    "do"
+    | "if"
+    | "in"
+    | "fn"
+    | "let"
+    | "try"
+    | "for"
+    | "then"
+    | "else"
+    | "proc"
+    | "true"
+    | "false"
+    | "none"
+    | "raise"
+    | "catch"
+}
+program = ${ SOI ~ suite ~ EOI }
+
+number = @{
+    "-"?
+    ~ ("0" | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*)
+    ~ ("." ~ ASCII_DIGIT*)?
+    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+
+symbol_punctuation = {
+    "?" | "_" | "-" | "+" | "*" | "/" | "!" 
+}
+symbol = @{ !(keyword ~ WHITESPACE) ~ (alpha | symbol_punctuation) ~ (alpha | digit | symbol_punctuation)* }
+
+string = ${ "\"" ~ inner ~ "\"" }
+inner = @{ char* }
+char = {
+    !("\"" | "\\") ~ ANY
+    | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+    | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+}
+dict = {
+    "{" ~ "}" |
+    "{" ~ pair ~ ("," ~ pair)* ~ ","? ~ "}"
+}
+pair = { value ~ ":" ~ value }
+
+list = {
+    "[" ~ "]" |
+    "[" ~ value ~ ("," ~ value)* ~ ","? ~ "]"
+}
+
+if_else = { "if" ~ value ~ "then" ~ value ~ "else" ~ value }
+for_loop = { "for" ~ value ~ "in" ~ value ~ "do" ~ value }
+let_var_in = { "let" ~ value ~ "=" ~ value ~ "in" ~ value }
+set_var = { "let" ~ value ~ "=" ~ value }
+apply = { simple_value ~ simple_value+ }
+
+try_catch = { "try" ~ value ~ "catch" ~ value }
+
+lambda_fn = { symbol ~ "->" ~ value }
+proc_fn = { symbol ~ "=>" ~ value }
+macro_fn = { symbol ~ "~>" ~ value }
+
+exception = { "raise" ~ simple_value }
+
+group = {"(" ~ value ~ ")"}
+suite = { value ~ (";" ~ value)* ~ ";"? }
+block = _{"{" ~ suite ~ "}"}
+
+simple_value = { block | group | exception | quote | dict | list | string | number | boolean | none | symbol }
+complex_value = { lambda_fn | macro_fn | proc_fn | let_var_in | set_var | if_else | for_loop | try_catch | apply | simple_value }
+value = !{ complex_value | simple_value }
+
+boolean = { "True" | "Talse" }
+none = { "None" | "(" ~ ")" }
+
+quote = { "'" ~ value }
