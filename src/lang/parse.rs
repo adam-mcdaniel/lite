@@ -1,6 +1,6 @@
-use super::{Expr, Env, err};
+use super::{err, Env, Expr};
+use pest::iterators::Pair;
 use std::collections::BTreeMap;
-use pest::iterators::{Pair, Pairs};
 
 #[derive(Parser)]
 #[grammar = "lang/grammar.pest"]
@@ -14,15 +14,14 @@ pub fn parse(code: &str) -> Result<Expr, Expr> {
             for pair in pairs {
                 match process_expr(pair) {
                     Ok(e) => exprs.push(e),
-                    Err(e) => return err("InvalidSyntax", Expr::String(code.to_owned())),
+                    Err(_e) => return err("InvalidSyntax", Expr::String(code.to_owned())),
                 }
             }
             Ok(Expr::Do(exprs))
-        },
-        Err(e) => err("InvalidSyntax", Expr::String(code.to_owned())),
+        }
+        Err(_e) => err("InvalidSyntax", Expr::String(code.to_owned())),
     }
 }
-
 
 fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
     Ok(match pair.as_rule() {
@@ -42,7 +41,7 @@ fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
                 .unwrap()
                 .as_str()
                 .replace("\\n", "\n")
-                .replace("\\\"", "\"")
+                .replace("\\\"", "\""),
         ),
         Rule::symbol => Expr::Symbol(pair.as_str().to_string()),
 
@@ -120,7 +119,7 @@ fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
         Rule::apply => {
             let mut pairs = pair.into_inner();
             // println!("{:?}", pairs);
-            let mut f = process_expr(pairs.next().unwrap())?;
+            let f = process_expr(pairs.next().unwrap())?;
             let mut args = vec![];
             for pair in pairs {
                 args.push(process_expr(pair)?)

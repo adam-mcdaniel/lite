@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 pest = "2.1"
 pest_derive = "2.1"
-crossterm = "0.24"
+crossterm = "0.27"

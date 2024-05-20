@@ -1,8 +1,5 @@
-use super::{eval, Buffer, Change, Direction, Env, Expr, Frontend};
-use std::{
-    cmp::min,
-    fmt
-};
+use super::{eval, Buffer, Change, Direction, Env, Expr};
+use std::{cmp::min, fmt};
 
 pub struct Editor {
     buffers: Vec<Buffer>,
@@ -15,12 +12,50 @@ impl Editor {
         Self {
             buffers: vec![Buffer::default()],
             current_buffer_index: 0,
-            env: Env::default()
+            env: Env::default(),
         }
+    }
+
+    pub fn cur_buf_id(&self) -> usize {
+        self.current_buffer_index
+    }
+
+    pub fn from_file_name(file: String) -> Self {
+        let mut editor = Self::new();
+        editor.buffers[0] = Buffer::from_file_name(file);
+        editor
     }
 
     pub fn new_buf(&mut self) {
         self.buffers.push(Buffer::default());
+    }
+
+    pub fn add_buf(&mut self, buf: Buffer) {
+        self.buffers.push(buf);
+    }
+
+    pub fn quit_buf(&mut self, save: bool) {
+        if save {
+            let buf = self.cur_buf_mut().unwrap();
+            if let Some(file_name) = buf.get_file_name().map(String::from) {
+                buf.save(&file_name).unwrap();
+            }
+        }
+        self.buffers.remove(self.cur_buf_id());
+        if self.buffers.is_empty() {
+            self.new_buf();
+        }
+        self.set_buf(min(self.buffers.len() - 1, self.cur_buf_id() - 1));
+    }
+
+    pub fn max_buf_id(&self) -> usize {
+        self.buffers.len() - 1
+    }
+
+    pub fn set_buf(&mut self, id: usize) {
+        if id < self.buffers.len() {
+            self.current_buffer_index = id;
+        }
     }
 
     fn apply(&mut self, change: Change) {
@@ -37,6 +72,18 @@ impl Editor {
 
     pub fn get_selected(&self) -> Option<String> {
         self.cur_buf().and_then(|buf| buf.selected())
+    }
+
+    pub fn selection_range(&self) -> Option<((usize, usize), (usize, usize))> {
+        self.cur_buf().and_then(|buf| buf.selection_range())
+    }
+
+    pub fn selection_start(&self) -> Option<(usize, usize)> {
+        self.cur_buf().and_then(|buf| buf.selection_start())
+    }
+
+    pub fn selection_end(&self) -> Option<(usize, usize)> {
+        self.cur_buf().and_then(|buf| buf.selection_end())
     }
 
     pub fn get_selected_lines(&self) -> Option<&[String]> {
@@ -119,7 +166,7 @@ impl Editor {
         if self.buffers.is_empty() {
             return;
         }
-        self.current_buffer_index += 1 % self.buffers.len();
+        self.set_buf((self.current_buffer_index + 1) % self.buffers.len());
     }
 
     pub fn prev_buf(&mut self) {
@@ -129,16 +176,19 @@ impl Editor {
         if self.current_buffer_index > 0 {
             self.current_buffer_index -= 1;
         } else {
-            self.current_buffer_index = self.buffers.len() - 1
+            self.current_buffer_index = self.buffers.len() - 1;
         }
     }
 }
 
-
 impl fmt::Debug for Editor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !self.buffers.is_empty() {
-            write!(f, "{:?} {:?}", self.buffers, self.buffers[self.current_buffer_index])
+            write!(
+                f,
+                "{:?} {:?}",
+                self.buffers, self.buffers[self.current_buffer_index]
+            )
         } else {
             Ok(())
         }

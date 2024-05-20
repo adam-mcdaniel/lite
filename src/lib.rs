@@ -8,11 +8,12 @@ mod frontend;
 pub use frontend::*;
 mod lang;
 pub use lang::*;
+mod terminal;
+pub use terminal::*;
 
 extern crate pest;
 #[macro_use]
 extern crate pest_derive;
-
 
 #[derive(Clone, Copy, Debug)]
 pub enum Direction {

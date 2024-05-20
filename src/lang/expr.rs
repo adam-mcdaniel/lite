@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Buffer, Change, Direction, Editor};
+use crate::{Buffer, Direction, Editor};
 use std::{collections::BTreeMap, fmt};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -55,7 +55,8 @@ pub enum Expr {
     Assign(Box<Self>, Box<Self>),
 
     If(Box<Self>, Box<Self>, Box<Self>),
-    Try(Box<Self>, Box<Self>), Raise(Box<Self>),
+    Try(Box<Self>, Box<Self>),
+    Raise(Box<Self>),
     For(Box<Self>, Box<Self>, Box<Self>),
     While(Box<Self>, Box<Self>),
 }
@@ -76,7 +77,7 @@ impl fmt::Debug for Expr {
             Self::Symbol(s) => write!(f, "{s}"),
             Self::Int(n) => write!(f, "{n}"),
             Self::Float(n) => write!(f, "{}", f64::from(*n)),
-            Self::Bool(b) => write!(f, "{}", if *b {"True"} else {"False"}),
+            Self::Bool(b) => write!(f, "{}", if *b { "True" } else { "False" }),
             Self::String(s) => {
                 let debug = format!("{s:?}");
                 write!(f, "\"{}\"", &debug[1..debug.len() - 1])
@@ -159,7 +160,7 @@ pub fn get_nth_arg(args: &Vec<Expr>, n: usize) -> Result<Expr, Expr> {
     }
 }
 
-pub fn select(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
+pub fn select(_args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result<Expr, Expr> {
     // for arg in args {
     //     match eval(arg, editor, env)? {
     //         Expr::String(s) => editor.insert(s),
@@ -169,7 +170,7 @@ pub fn select(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Exp
     editor.select();
     Ok(Expr::None)
 }
-pub fn unselect(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
+pub fn unselect(_args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result<Expr, Expr> {
     // for arg in args {
     //     match eval(arg, editor, env)? {
     //         Expr::String(s) => editor.insert(s),
@@ -205,7 +206,11 @@ pub fn delete(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Exp
     Ok(Expr::None)
 }
 
-pub fn get_undo_stack_len(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
+pub fn get_undo_stack_len(
+    _args: Vec<Expr>,
+    editor: &mut Editor,
+    _env: &mut Env,
+) -> Result<Expr, Expr> {
     Ok(if let Some(buf) = editor.cur_buf() {
         Expr::Int(buf.undo_stack.len() as isize)
     } else {
@@ -224,7 +229,7 @@ pub fn undo(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr,
             for _ in 0..count as usize {
                 editor.undo()
             }
-        },
+        }
         Expr::Int(_) => {}
         other => return err("TypeMismatch", other),
     }
@@ -243,7 +248,7 @@ pub fn redo(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr,
             for _ in 0..count as usize {
                 editor.redo()
             }
-        },
+        }
         Expr::Int(_) => {}
         other => return err("TypeMismatch", other),
     }
@@ -286,7 +291,7 @@ pub fn goto_cursor(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Resul
 pub fn get_selection_start(
     args: Vec<Expr>,
     editor: &mut Editor,
-    env: &mut Env,
+    _env: &mut Env,
 ) -> Result<Expr, Expr> {
     if args.len() > 0 {
         return err("TooManyArgs", Expr::List(args));
@@ -304,7 +309,7 @@ pub fn get_selection_start(
 pub fn get_selection_end(
     args: Vec<Expr>,
     editor: &mut Editor,
-    env: &mut Env,
+    _env: &mut Env,
 ) -> Result<Expr, Expr> {
     if args.len() > 0 {
         return err("TooManyArgs", Expr::List(args));
@@ -322,7 +327,7 @@ pub fn get_selection_end(
 pub fn get_selection_len(
     args: Vec<Expr>,
     editor: &mut Editor,
-    env: &mut Env,
+    _env: &mut Env,
 ) -> Result<Expr, Expr> {
     if args.len() > 0 {
         return err("TooManyArgs", Expr::List(args));
@@ -335,7 +340,7 @@ pub fn get_selection_len(
     })
 }
 
-pub fn get_selected(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
+pub fn get_selected(args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result<Expr, Expr> {
     if args.len() > 0 {
         return err("TooManyArgs", Expr::List(vec![]));
     }
@@ -350,7 +355,7 @@ pub fn get_selected(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Resu
 pub fn get_selected_lines(
     args: Vec<Expr>,
     editor: &mut Editor,
-    env: &mut Env,
+    _env: &mut Env,
 ) -> Result<Expr, Expr> {
     if args.len() > 0 {
         return err("TooManyArgs", Expr::List(vec![]));
@@ -680,5 +685,4 @@ pub fn eval(mut expr: Expr, editor: &mut Editor, env: &mut Env) -> Result<Expr, 
             },
         });
     }
-    Ok(Expr::None)
 }

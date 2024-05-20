@@ -17,6 +17,13 @@ impl Change {
         Self::Move((buf.cursor_row, buf.cursor_col), dir)
     }
 
+    pub fn modifies_content(&self) -> bool {
+        match self {
+            Self::Insert(_) | Self::Delete(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn goto_cur(pos: (usize, usize), buf: &Buffer) -> Self {
         Self::Goto((buf.cursor_row, buf.cursor_col), pos)
     }
@@ -42,7 +49,8 @@ impl Change {
                         deleted.push(ch);
                     }
                 }
-                buf.undo_stack.push(Self::Delete(deleted.chars().rev().collect()));
+                buf.undo_stack
+                    .push(Self::Delete(deleted.chars().rev().collect()));
             }
 
             Self::Move(_, dir) => {

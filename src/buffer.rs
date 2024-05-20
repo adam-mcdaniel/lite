@@ -1,8 +1,9 @@
 use super::{Change, Direction};
-use std::cmp::{max, min};
+use std::cmp::min;
 
 #[derive(Clone, Debug)]
 pub struct Buffer {
+    file: Option<String>,
     lines: Vec<String>,
     // screen_min_row: usize, // the starting row to be displayed
     // screen_rows: usize,    // the number of rows to be displayed
@@ -13,11 +14,14 @@ pub struct Buffer {
 
     pub undo_stack: Vec<Change>,
     pub redo_stack: Vec<Change>,
+
+    edited: bool,
 }
 
 impl Default for Buffer {
     fn default() -> Self {
         Self {
+            file: None,
             lines: vec![String::new()],
             // screen_min_row: 0,
             // screen_rows: 24,
@@ -26,11 +30,70 @@ impl Default for Buffer {
             select_row_col: None,
             undo_stack: vec![],
             redo_stack: vec![],
+            edited: false,
         }
     }
 }
 
 impl Buffer {
+    pub fn from_file_name(file: String) -> Self {
+        let mut lines: Vec<_> = std::fs::read_to_string(&file)
+            .unwrap_or_else(|_| String::new())
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        Self {
+            file: Some(file),
+            lines,
+            cursor_col: 0,
+            cursor_row: 0,
+            select_row_col: None,
+            undo_stack: vec![],
+            redo_stack: vec![],
+            edited: false,
+        }
+    }
+
+    pub fn from_text(text: &str) -> Self {
+        let mut lines: Vec<_> = text.lines().map(|s| s.to_string()).collect();
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        Self {
+            file: None,
+            lines,
+            cursor_col: 0,
+            cursor_row: 0,
+            select_row_col: None,
+            undo_stack: vec![],
+            redo_stack: vec![],
+            edited: false,
+        }
+    }
+
+    pub fn get_last_change(&self) -> Option<&Change> {
+        self.undo_stack.last()
+    }
+
+    pub fn get_file_name(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+
+    pub fn set_file_name(&mut self, file: String) {
+        self.file = Some(file);
+    }
+
+    pub fn save(&mut self, file_name: &str) -> std::io::Result<()> {
+        self.edited = false;
+        std::fs::write(file_name, self.lines.join("\n"))
+    }
+
+    pub fn is_edited(&self) -> bool {
+        self.edited
+    }
     // fn set_screen_rows(&mut self, rows: usize) {
     //     self.screen_rows = rows;
     // }
@@ -42,6 +105,9 @@ impl Buffer {
     //         self.screen_min_row -= self.screen_min_row - self.cursor_row;
     //     }
     // }
+    pub fn content(&self) -> &[String] {
+        &self.lines
+    }
 
     pub fn get_lines(&self, min_row: usize, max_row: usize) -> &[String] {
         &self.lines[min_row..min(max_row, self.lines.len())]
@@ -130,7 +196,6 @@ impl Buffer {
 
     pub fn selected(&self) -> Option<String> {
         let lines = self.selected_lines()?;
-        eprintln!("{:?}", lines);
         let last_line_len = lines.last()?.len();
         let mut lines: String = lines.join("\n");
         if let Some((selected_row, selected_col)) = self.select_row_col {
@@ -159,10 +224,19 @@ impl Buffer {
     }
 
     pub fn cur_line_mut(&mut self) -> &mut String {
+        self.edited = true;
         &mut self.lines[self.cursor_row]
     }
 
+    pub fn insert_str(&mut self, text: &str) {
+        self.edited = true;
+        for ch in text.chars() {
+            self.insert(ch)
+        }
+    }
+
     pub fn insert(&mut self, ch: char) {
+        self.edited = true;
         if ch == '\n' {
             let col = self.cursor_col;
             let line = self.cur_line_mut();
@@ -176,6 +250,7 @@ impl Buffer {
     }
 
     pub fn delete(&mut self) -> Option<char> {
+        self.edited = true;
         let col = self.cursor_col;
         let lines_len = self.lines.len();
         let line = self.cur_line_mut();
@@ -188,7 +263,6 @@ impl Buffer {
             Some(line.remove(col))
         } else {
             // Otherwise, join it with the next line
-            drop(line);
             if self.cursor_row + 1 < self.lines.len() {
                 let next = self.lines.remove(self.cursor_row + 1);
                 self.lines[self.cursor_row] += &next;
