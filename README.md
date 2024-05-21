@@ -47,6 +47,10 @@ This will install the `lite` executable in your `$HOME/.cargo/bin` directory. Ma
 
 ## Usage
 
+<div align="center">
+    <img src="assets/usage.png" width="50%">
+</div>
+
 To open a file in lite, simply run the following command:
 
 ```bash
