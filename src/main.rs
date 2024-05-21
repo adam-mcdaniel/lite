@@ -1,4 +1,4 @@
-use blackjack::{
+use lite::{
     delete,  eval, get_selected, get_selected_lines, get_selection_end, get_selection_len,
     get_selection_start, get_undo_stack_len, goto_cursor, insert, move_cursor, redo, select,
     undo, unselect, Buffer, Builtin, Direction, Editor, Expr, Frontend, Input, Terminal

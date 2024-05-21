@@ -265,6 +265,7 @@ impl Frontend for Terminal {
                         execute!(
                             stdout(),
                             SetBackgroundColor(Color::White),
+                            SetForegroundColor(Color::Black),
                             MoveTo(start as u16, i as u16),
                             Print(if line.is_empty() {
                                 " "
