@@ -19,7 +19,7 @@ pub fn parse(code: &str) -> Result<Expr, Expr> {
             }
             Ok(Expr::Do(exprs))
         }
-        Err(_e) => err("InvalidSyntax", Expr::String(code.to_owned())),
+        Err(e) => err("InvalidSyntax", Expr::String(format!("parse error: {}", e))),
     }
 }
 
@@ -29,7 +29,7 @@ fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
             process_expr(pair.into_inner().next().unwrap())?
         }
         Rule::number => {
-            if let Ok(n) = pair.as_str().parse::<isize>() {
+            if let Ok(n) = pair.as_str().parse::<i64>() {
                 Expr::Int(n)
             } else {
                 Expr::Float(pair.as_str().parse::<f64>().unwrap().into())
@@ -41,7 +41,8 @@ fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
                 .unwrap()
                 .as_str()
                 .replace("\\n", "\n")
-                .replace("\\\"", "\""),
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
         ),
         Rule::symbol => Expr::Symbol(pair.as_str().to_string()),
 
@@ -133,7 +134,12 @@ fn process_expr(pair: Pair<Rule>) -> Result<Expr, String> {
             let ret = process_expr(pairs.next().unwrap())?;
             Expr::Fn(vec![arg], Box::new(ret), Env::default())
         }
-
+        Rule::macro_fn => {
+            let mut pairs = pair.into_inner();
+            let arg = process_expr(pairs.next().unwrap())?;
+            let ret = process_expr(pairs.next().unwrap())?;
+            Expr::Macro(vec![arg], Box::new(ret))
+        }
         Rule::proc_fn => {
             let mut pairs = pair.into_inner();
             let arg = process_expr(pairs.next().unwrap())?;

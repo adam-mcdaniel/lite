@@ -1,4 +1,5 @@
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT    = { "#" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 
 keyword = {
     "do"
@@ -17,7 +18,7 @@ keyword = {
     | "raise"
     | "catch"
 }
-program = ${ SOI ~ suite ~ EOI }
+program = ${ SOI ~ suite ~ WHITESPACE* ~ EOI }
 
 number = @{
     "-"?
@@ -39,6 +40,7 @@ char = {
     !("\"" | "\\") ~ ANY
     | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
     | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+    | WHITESPACE
 }
 dict = {
     "{" ~ "}" |
@@ -65,15 +67,15 @@ macro_fn = { symbol ~ "~>" ~ value }
 
 exception = { "raise" ~ simple_value }
 
-group = {"(" ~ value ~ ")"}
-suite = { value ~ (";" ~ value)* ~ ";"? }
-block = _{"{" ~ suite ~ "}"}
+group = {"(" ~ WHITESPACE* ~ value ~ WHITESPACE* ~ ")"}
+suite = { value ~ WHITESPACE* ~ (";" ~ WHITESPACE* ~ value ~ WHITESPACE*)* ~ ";"? ~ WHITESPACE* }
+block = _{"{"~ WHITESPACE* ~ suite ~ WHITESPACE* ~ "}"}
 
 simple_value = { block | group | exception | quote | dict | list | string | number | boolean | none | symbol }
 complex_value = { lambda_fn | macro_fn | proc_fn | let_var_in | set_var | if_else | for_loop | try_catch | apply | simple_value }
 value = !{ complex_value | simple_value }
 
-boolean = { "True" | "Talse" }
+boolean = { "True" | "False" }
 none = { "None" | "(" ~ ")" }
 
 quote = { "'" ~ value }

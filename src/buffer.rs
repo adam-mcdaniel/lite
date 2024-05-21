@@ -74,6 +74,29 @@ impl Buffer {
         }
     }
 
+    /// Find the next instance of a string in the buffer after the cursor.
+    pub fn find(&self, text: &str) -> Option<(usize, usize)> {
+        let start_row = self.cursor_row;
+        let mut start_col = self.cursor_col + 1;
+
+        for row in start_row..self.lines.len() {
+            let line = &self.lines[row];
+            if let Some(col) = line[start_col..].find(text) {
+                return Some((row, col + start_col));
+            }
+            start_col = 0;
+        }
+
+        // If it's not found, try from the beginning of the buffer
+        for row in 0..start_row {
+            let line = &self.lines[row];
+            if let Some(col) = line.find(text) {
+                return Some((row, col));
+            }
+        }
+        None
+    }
+
     pub fn get_last_change(&self) -> Option<&Change> {
         self.undo_stack.last()
     }

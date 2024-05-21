@@ -5,7 +5,7 @@ use crossterm::{
     event::{poll, read, Event, KeyCode, KeyModifiers},
     execute,
     style::{Color, Attribute, Print, ResetColor, SetBackgroundColor, SetForegroundColor, SetAttribute},
-    terminal::{disable_raw_mode, enable_raw_mode, size, Clear, ClearType},
+    terminal::{disable_raw_mode, enable_raw_mode, size, SetTitle, Clear, ClearType},
 };
 
 use std::io::stdout;
@@ -20,6 +20,8 @@ pub struct Terminal {
 }
 
 impl Terminal {
+
+    const BACKGROUND_COLOR: Color = Color::Black;
     const STATUS_COLOR: Color = Color::DarkMagenta;
 
     const KEYWORDS: &'static [&'static str] = &[
@@ -96,7 +98,16 @@ impl Terminal {
     ];
 
     const OPERATORS: &'static [&'static str] = &[
+        "#define",
+        "#pragma",
+        "#ifdef",
+        "#ifndef",
+        "#else",
+        "#endif",
         "#include",
+        "~",
+        "$",
+        "!",
         "+",
         "-",
         "*",
@@ -153,14 +164,14 @@ impl Terminal {
             if !word.chars().all(char::is_alphanumeric) {
                 for ch in word.chars() {
                     if Self::OPERATORS.contains(&ch.to_string().as_str()) {
-                        execute!(stdout(), SetForegroundColor(Color::Yellow), Print(ch)).unwrap();
+                        execute!(stdout(), SetBackgroundColor(Self::BACKGROUND_COLOR), SetForegroundColor(Color::Yellow), Print(ch)).unwrap();
                     } else {
-                        execute!(stdout(), SetForegroundColor(color), Print(ch)).unwrap();
+                        execute!(stdout(), SetBackgroundColor(Self::BACKGROUND_COLOR), SetForegroundColor(color), Print(ch)).unwrap();
                     }
                 }
                 execute!(stdout(), ResetColor).unwrap();
             } else {
-                execute!(stdout(), SetForegroundColor(color), Print(word), ResetColor).unwrap();
+                execute!(stdout(), SetBackgroundColor(Self::BACKGROUND_COLOR), SetForegroundColor(color), Print(word), ResetColor).unwrap();
             }
 
         }
@@ -170,6 +181,7 @@ impl Terminal {
 impl Default for Terminal {
     fn default() -> Self {
         enable_raw_mode().expect("Failed to enable raw mode");
+        execute!(stdout(), SetTitle("lite📝")).expect("Could not set terminal title");
         Self {
             screen_start_row: 0,
             screen_cols: 80,
@@ -197,7 +209,7 @@ impl Frontend for Terminal {
     }
 
     fn exit(&mut self) {
-        execute!(stdout(), MoveTo(0, 0), Clear(ClearType::All)).unwrap();
+        execute!(stdout(), MoveTo(0, 0), ResetColor, Clear(ClearType::All)).unwrap();
     }
 
     fn render(&mut self, editor: &Editor, flush: bool) -> Result<(), String> {
@@ -206,9 +218,10 @@ impl Frontend for Terminal {
             Err(_) => (80, 23),
         };
 
-        if flush {
-            execute!(stdout(), Clear(ClearType::All), MoveTo(0, 0)).unwrap();
-        }
+        execute!(stdout(), SetBackgroundColor(Self::BACKGROUND_COLOR), Clear(ClearType::All), MoveTo(0, 0)).unwrap();
+        // if flush {
+        //     execute!(stdout(), SetBackgroundColor(Self::BACKGROUND_COLOR), Clear(ClearType::All), MoveTo(0, 0)).unwrap();
+        // }
         
         if let Some(buf) = editor.cur_buf() {
             let (cur_row, cur_col) = buf.cur_pos();
@@ -376,12 +389,20 @@ impl Frontend for Terminal {
         }
     }
 
-    fn prompt(&mut self, text: &str) -> Result<String, String> {
+    fn prompt(&mut self, text: &str, pre_input: Option<String>) -> Result<String, String> {
         // Go to the status line and ask the question
         execute!(stdout(), MoveTo(0, self.screen_rows as u16), SetBackgroundColor(Self::STATUS_COLOR), Clear(ClearType::CurrentLine))
             .unwrap();
-        execute!(stdout(), MoveTo(0, self.screen_rows as u16), Print(text), ResetColor).unwrap();
-        let mut input = String::new();
+        let mut input = pre_input.unwrap_or(String::new());
+        execute!(
+            stdout(),
+            MoveTo(0, self.screen_rows as u16),
+            SetBackgroundColor(Self::STATUS_COLOR), 
+            Clear(ClearType::CurrentLine),
+            Print(text),
+            Print(&input),
+            ResetColor
+        ).unwrap();
         loop {
             if poll(std::time::Duration::from_millis(1_000)).is_ok() {
                 if let Ok(event) = read() {

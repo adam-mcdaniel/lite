@@ -106,6 +106,10 @@ impl Editor {
         }
     }
 
+    pub fn is_selected(&self) -> bool {
+        self.cur_buf().map(|buf| buf.selection_start().is_some()).unwrap_or(false)
+    }
+
     pub fn insert(&mut self, text: impl ToString) {
         self.apply(Change::Insert(text.to_string()));
         self.clear_redo_stack();
@@ -118,7 +122,14 @@ impl Editor {
 
     pub fn move_cur(&mut self, dir: Direction) {
         if let Some(buf) = self.cur_buf() {
-            let change = Change::move_cur(dir, buf);
+            let change = Change::move_cur(dir, buf, 1);
+            self.apply(change)
+        }
+    }
+
+    pub fn move_cur_by(&mut self, dir: Direction, count: usize) {
+        if let Some(buf) = self.cur_buf() {
+            let change = Change::move_cur(dir, buf, count);
             self.apply(change)
         }
     }

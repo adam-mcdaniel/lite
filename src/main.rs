@@ -1,20 +1,13 @@
 use lite::{
-    delete,  eval, get_selected, get_selected_lines, get_selection_end, get_selection_len,
+    delete, eval, get_selected, get_selected_lines, get_selection_end, get_selection_len,
     get_selection_start, get_undo_stack_len, goto_cursor, insert, move_cursor, redo, select,
-    undo, unselect, Buffer, Builtin, Direction, Editor, Expr, Frontend, Input, Terminal
+    undo, unselect, parse, Buffer, Builtin, Direction, Editor, Expr, Frontend, Input, Terminal
 };
+use dirs::home_dir;
 
 fn main() -> Result<(), Expr> {
-    // let mut editor = Editor::new();
-    // Check if there's a file to open
-    let args: Vec<String> = std::env::args().collect();
-    let mut editor = if args.len() > 1 {
-        Editor::from_file_name(args[1].clone())
-    } else {
-        Editor::new()
-    };
+    let mut editor = Editor::new();
 
-    
     editor.env.scope.insert(
         Expr::Symbol(String::from("insert")),
         Expr::Builtin(Builtin::new(
@@ -216,20 +209,80 @@ fn main() -> Result<(), Expr> {
             },
         )),
     );
-    // println!("{:?}", editor.eval(parse(r#"{
-    //     insert "a";
-    //     insert "b";
-    //     insert "c";
-    //     insert "d";
-    //     insert "e";
-    //     move "left";
-    //     move "left";
-    //     delete 3;
-    //     let n = get-undo-stack-len ();
-    //     insert "xyz";
+    editor.env.scope.insert(
+        Expr::Symbol(String::from("new-buf")),
+        Expr::Builtin(Builtin::new(
+            "new-buf",
+            "Create a new buffer in the editor",
+            "Creates a new buffer in the editor",
+            |_args, editor, _env| {
+                let buf = Buffer::default();
+                editor.add_buf(buf);
+                Ok(Expr::Int(editor.max_buf_id() as i64))
+            },
+        )),
+    );
+    editor.env.scope.insert(
+        Expr::Symbol(String::from("set-buf")),
+        Expr::Builtin(Builtin::new(
+            "set-buf",
+            "Set the current buffer",
+            "Sets the current buffer",
+            |args, editor, env| {
+                if let Expr::Int(id) = eval(args[0].clone(), editor, env)? {
+                    editor.set_buf(id as usize);
+                    Ok(Expr::Int(editor.cur_buf_id() as i64))
+                } else {
+                    Err(Expr::String("Expected an integer".to_string()))
+                }
+            },
+        )),
+    );
+    
+    // Check if config file exists in home directory
+    let home = home_dir().unwrap();
+    let config = home.join("config.lite");
+    let config = if config.exists() {
+        std::fs::read_to_string(config).unwrap()
+    } else {
+        include_str!("../config.lite").to_string()  
+    };
+    let config = match parse(config.trim()) {
+        Ok(expr) => expr,
+        Err(e) => {
+            eprintln!("Failed to parse config: {}", e);
+            std::process::exit(1);
+        }
+    };
+    match editor.eval(config) {
+        Ok(exports) => {
+            if let Expr::Dict(dict) = exports.clone() {
+                for (key, val) in dict {
+                    editor.env.scope.insert(key, val);
+                }
+            }
+            editor.env.scope.insert(
+                Expr::Symbol(String::from("config")),
+                exports,
+            );
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    }
 
-    //     undo (sub (get-undo-stack-len ()) n)
-    // }"#)?));
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        let file = args[1].clone();
+        let buf = Buffer::from_file_name(file);
+        editor.add_buf(buf);
+        editor.set_buf(editor.max_buf_id());
+    }
+
+
+    let mut last_search = String::new();
+    let mut last_eval = String::new();
 
     let mut frontend = Terminal::default();
     let mut selected = false;
@@ -254,7 +307,7 @@ fn main() -> Result<(), Expr> {
                             editor.insert(ch.to_uppercase())
                         }
                         Input::Left | Input::Right | Input::Up | Input::Down => {
-                            if !selected {
+                            if !selected || !editor.is_selected() {
                                 editor.select();
                                 selected = true;
                             }
@@ -267,7 +320,7 @@ fn main() -> Result<(), Expr> {
                             }
                         }
                         Input::Home => {
-                            if !selected {
+                            if !selected || !editor.is_selected() {
                                 editor.select();
                                 selected = true;
                             }
@@ -276,7 +329,7 @@ fn main() -> Result<(), Expr> {
                             }
                         }
                         Input::End => {
-                            if !selected {
+                            if !selected || !editor.is_selected() {
                                 editor.select();
                                 selected = true;
                             }
@@ -285,7 +338,7 @@ fn main() -> Result<(), Expr> {
                             }
                         }
                         Input::PageDown => {
-                            if !selected {
+                            if !selected || !editor.is_selected() {
                                 editor.select();
                                 selected = true;
                             }
@@ -294,7 +347,7 @@ fn main() -> Result<(), Expr> {
                             }
                         }
                         Input::PageUp => {
-                            if !selected {
+                            if !selected || !editor.is_selected() {
                                 editor.select();
                                 selected = true;
                             }
@@ -349,7 +402,7 @@ fn main() -> Result<(), Expr> {
                         Input::Char('0') => editor.set_buf(0),
                         Input::Char('!') => {
                             // Get a shell command
-                            if let Ok(cmd) = frontend.prompt("Enter shell command: ") {
+                            if let Ok(cmd) = frontend.prompt("Enter shell command: ", None) {
                                 let words = cmd.split_whitespace().collect::<Vec<&str>>();
                                 // Join together the stdout and stderr
                                 if let Ok(output) = std::process::Command::new(words[0])
@@ -364,15 +417,37 @@ fn main() -> Result<(), Expr> {
                                     let buf = Buffer::from_text(&output);
                                     editor.add_buf(buf);
                                     editor.set_buf(editor.max_buf_id());
+                                    frontend.set_status(&format!("Viewing output of: {}", cmd)).unwrap();
                                 } else {
                                     frontend.set_status("Failed to run command").unwrap();
                                 }
                             }
+                            continue;
                         },
-                        Input::Char('\'') => {
+                        Input::Char('e') => {
+                            // Get an input command from the prompt
+                            if let Ok(cmd) = frontend.prompt("Enter command: ", Some(last_eval.clone())) {
+                                last_eval = cmd.clone();
+                                match parse(&cmd) {
+                                    Ok(expr) => match editor.eval(expr) {
+                                        Ok(result) => {
+                                            frontend.set_status(&format!("Result: {result}")).unwrap();
+                                        }
+                                        Err(e) => {
+                                            frontend.set_status(&format!("Error: {}", e)).unwrap();
+                                        }
+                                    },
+                                    Err(e) => {
+                                        frontend.set_status(&format!("Syntax Error: {}", e)).unwrap();
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+                        Input::Char('n') => {
                             editor.next_buf();
                         },
-                        Input::Char('"') => {
+                        Input::Char('p') => {
                             editor.prev_buf();
                         },
                         _ => {}
@@ -389,7 +464,7 @@ fn main() -> Result<(), Expr> {
                                     buf.save(&file_name).unwrap();
                                 },
                                 None => {
-                                    if let Ok(file_name) = frontend.prompt("Enter file name: ") {
+                                    if let Ok(file_name) = frontend.prompt("Enter file name: ", None) {
                                         buf.save(&file_name).unwrap();
                                     }
                                 }
@@ -398,12 +473,13 @@ fn main() -> Result<(), Expr> {
                         Input::Char('q') => {
                             if !editor.cur_buf().unwrap().is_edited() {
                                 editor.quit_buf(false);
+                                frontend.set_status(&format!("Editing in buffer #{}: {}", editor.cur_buf_id(), editor.cur_buf().unwrap().get_file_name().unwrap_or("unnamed"))).unwrap();
                                 continue;
                             }
 
                             let should_save = frontend.ask("Do you want to save the buffer?", "y", "n").unwrap();
                             if should_save && editor.cur_buf().unwrap().get_file_name().is_none() {
-                                if let Ok(filename) = frontend.prompt("Enter file name: ") {
+                                if let Ok(filename) = frontend.prompt("Enter file name: ", None) {
                                     editor.cur_buf_mut().unwrap().set_file_name(filename);
                                     editor.quit_buf(should_save);
                                 }
@@ -413,7 +489,7 @@ fn main() -> Result<(), Expr> {
                             frontend.set_status(&format!("Editing in buffer #{}: {}", editor.cur_buf_id(), editor.cur_buf().unwrap().get_file_name().unwrap_or("unnamed"))).unwrap();
                         },
                         Input::Char('o') => {
-                            if let Ok(file) = frontend.prompt("Enter file name: ") {
+                            if let Ok(file) = frontend.prompt("Enter file name: ", None) {
                                 editor.add_buf(Buffer::from_file_name(file));
                                 editor.set_buf(editor.max_buf_id());
                                 frontend.set_status(&format!("Editing in buffer #{}: {}", editor.cur_buf_id(), editor.cur_buf().unwrap().get_file_name().unwrap_or("unnamed"))).unwrap();
@@ -427,6 +503,27 @@ fn main() -> Result<(), Expr> {
                             let row = lines.len() - 1;
                             let col = lines[row].len();
                             editor.goto_cur((row, col));
+                        },
+
+                        Input::Char('f') => {
+                            // Prompt the user for a search string
+                            if let Ok(search) = frontend.prompt("Search: ", Some(last_search.clone())) {
+                                last_search = search.clone();
+                                let buf = editor.cur_buf().unwrap();
+                                match buf.find(&search) {
+                                    Some((row, col)) => {
+                                        editor.goto_cur((row, col));
+                                    },
+                                    None => {
+                                        frontend.set_status("Not found").unwrap();
+                                    }
+                                }
+                            }
+
+                        },
+                        Input::Char('n') => {
+                            editor.new_buf();
+                            editor.set_buf(editor.max_buf_id());
                         },
                         Input::Char('z') => {
                             editor.undo();

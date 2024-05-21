@@ -21,7 +21,7 @@ impl From<Float> for f64 {
 pub enum Expr {
     Quote(Box<Self>),
     Symbol(String),
-    Int(isize),
+    Int(i64),
     Float(Float),
     Bool(bool),
     String(String),
@@ -183,10 +183,12 @@ pub fn unselect(_args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result
 
 pub fn insert(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
     for arg in args {
-        match eval(arg, editor, env)? {
-            Expr::String(s) => editor.insert(s),
-            other => return err("TypeMismatch", other),
-        }
+        // match eval(arg, editor, env)? {
+        //     Expr::String(s) => editor.insert(s),
+        //     other => return err("TypeMismatch", other),
+        // }
+        let text = eval(arg, editor, env)?.to_string();
+        editor.insert(text);
     }
     Ok(Expr::None)
 }
@@ -212,7 +214,7 @@ pub fn get_undo_stack_len(
     _env: &mut Env,
 ) -> Result<Expr, Expr> {
     Ok(if let Some(buf) = editor.cur_buf() {
-        Expr::Int(buf.undo_stack.len() as isize)
+        Expr::Int(buf.undo_stack.len() as i64)
     } else {
         Expr::None
     })
@@ -267,6 +269,14 @@ pub fn move_cursor(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Resul
                 "nowhere" => Direction::Nowhere,
                 _ => return err("InvalidArg", Expr::String(dir)),
             }),
+            Expr::Int(count) => {
+                let dir = if count > 0 {
+                    Direction::Right
+                } else {
+                    Direction::Left
+                };
+                editor.move_cur_by(dir, count.abs() as usize)
+            },
             other => return err("TypeMismatch", other),
         }
     }
@@ -276,6 +286,20 @@ pub fn move_cursor(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Resul
 pub fn goto_cursor(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Result<Expr, Expr> {
     if args.len() > 2 {
         return err("TooManyArgs", Expr::List(args));
+    }
+
+    if args.len() == 1 {
+        let arg = get_nth_arg(&args, 0)?;
+        match eval(arg, editor, env)? {
+            Expr::List(items) if items.len() == 2 => {
+                match (items[0].clone(), items[1].clone()) {
+                    (Expr::Int(row), Expr::Int(col)) => editor.goto_cur((row as usize, col as usize)),
+                    (a, b) => return err("TypeMismatch", Expr::List(vec![a, b])),
+                }
+            }
+            other => return err("TypeMismatch", other),
+        }
+        return Ok(Expr::None);
     }
 
     let row = get_nth_arg(&args, 0)?;
@@ -289,17 +313,17 @@ pub fn goto_cursor(args: Vec<Expr>, editor: &mut Editor, env: &mut Env) -> Resul
 }
 
 pub fn get_selection_start(
-    args: Vec<Expr>,
+    _args: Vec<Expr>,
     editor: &mut Editor,
     _env: &mut Env,
 ) -> Result<Expr, Expr> {
-    if args.len() > 0 {
-        return err("TooManyArgs", Expr::List(args));
-    }
+    // if args.len() > 0 {
+    //     return err("TooManyArgs", Expr::List(args));
+    // }
 
     Ok(
         if let Some((row, col)) = editor.cur_buf().and_then(Buffer::selection_start) {
-            Expr::List(vec![Expr::Int(row as isize), Expr::Int(col as isize)])
+            Expr::List(vec![Expr::Int(row as i64), Expr::Int(col as i64)])
         } else {
             Expr::None
         },
@@ -307,17 +331,17 @@ pub fn get_selection_start(
 }
 
 pub fn get_selection_end(
-    args: Vec<Expr>,
+    _args: Vec<Expr>,
     editor: &mut Editor,
     _env: &mut Env,
 ) -> Result<Expr, Expr> {
-    if args.len() > 0 {
-        return err("TooManyArgs", Expr::List(args));
-    }
+    // if args.len() > 0 {
+    //     return err("TooManyArgs", Expr::List(args));
+    // }
 
     Ok(
         if let Some((row, col)) = editor.cur_buf().and_then(Buffer::selection_end) {
-            Expr::List(vec![Expr::Int(row as isize), Expr::Int(col as isize)])
+            Expr::List(vec![Expr::Int(row as i64), Expr::Int(col as i64)])
         } else {
             Expr::None
         },
@@ -325,25 +349,25 @@ pub fn get_selection_end(
 }
 
 pub fn get_selection_len(
-    args: Vec<Expr>,
+    _args: Vec<Expr>,
     editor: &mut Editor,
     _env: &mut Env,
 ) -> Result<Expr, Expr> {
-    if args.len() > 0 {
-        return err("TooManyArgs", Expr::List(args));
-    }
+    // if args.len() > 0 {
+    //     return err("TooManyArgs", Expr::List(args));
+    // }
 
     Ok(if let Some(selected) = editor.get_selected() {
-        Expr::Int(selected.len() as isize)
+        Expr::Int(selected.len() as i64)
     } else {
         Expr::None
     })
 }
 
-pub fn get_selected(args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result<Expr, Expr> {
-    if args.len() > 0 {
-        return err("TooManyArgs", Expr::List(vec![]));
-    }
+pub fn get_selected(_args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Result<Expr, Expr> {
+    // if args.len() > 0 {
+    //     return err("TooManyArgs", Expr::List(vec![]));
+    // }
 
     Ok(if let Some(selected) = editor.get_selected() {
         Expr::String(selected)
@@ -353,13 +377,13 @@ pub fn get_selected(args: Vec<Expr>, editor: &mut Editor, _env: &mut Env) -> Res
 }
 
 pub fn get_selected_lines(
-    args: Vec<Expr>,
+    _args: Vec<Expr>,
     editor: &mut Editor,
     _env: &mut Env,
 ) -> Result<Expr, Expr> {
-    if args.len() > 0 {
-        return err("TooManyArgs", Expr::List(vec![]));
-    }
+    // if args.len() > 0 {
+    //     return err("TooManyArgs", Expr::List(vec![]));
+    // }
 
     Ok(if let Some(selected) = editor.get_selected_lines() {
         Expr::List(selected.to_owned().into_iter().map(Expr::String).collect())
@@ -410,7 +434,7 @@ pub fn eval(mut expr: Expr, editor: &mut Editor, env: &mut Env) -> Result<Expr, 
                 (Expr::Int(start), Expr::Int(end)) => Expr::List(
                     (start..end)
                         .into_iter()
-                        .map(|n| Expr::Int(n as isize))
+                        .map(|n| Expr::Int(n as i64))
                         .collect::<Vec<Expr>>(),
                 ),
 

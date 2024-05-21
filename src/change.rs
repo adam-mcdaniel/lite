@@ -4,7 +4,7 @@ use super::{Buffer, Direction};
 pub enum Change {
     Insert(String),
     Delete(String),
-    Move((usize, usize), Direction),
+    Move((usize, usize), Direction, usize),
     Goto((usize, usize), (usize, usize)),
     Select,
     Unselect,
@@ -13,8 +13,8 @@ pub enum Change {
 }
 
 impl Change {
-    pub fn move_cur(dir: Direction, buf: &Buffer) -> Self {
-        Self::Move((buf.cursor_row, buf.cursor_col), dir)
+    pub fn move_cur(dir: Direction, buf: &Buffer, count: usize) -> Self {
+        Self::Move((buf.cursor_row, buf.cursor_col), dir, count)
     }
 
     pub fn modifies_content(&self) -> bool {
@@ -53,11 +53,13 @@ impl Change {
                     .push(Self::Delete(deleted.chars().rev().collect()));
             }
 
-            Self::Move(_, dir) => {
+            Self::Move(_, dir, count) => {
                 let old_pos = buf.cur_pos();
-                buf.move_cur(*dir);
+                for _ in 0..*count {
+                    buf.move_cur(*dir);
+                }
                 if buf.cur_pos() == old_pos {
-                    buf.undo_stack.push(Self::Move(old_pos, Direction::Nowhere));
+                    buf.undo_stack.push(Self::Move(old_pos, Direction::Nowhere, *count));
                 } else {
                     buf.undo_stack.push(self.clone());
                 }
@@ -111,7 +113,7 @@ impl Change {
                 }
             }
 
-            Self::Move((old_row, old_col), _) => {
+            Self::Move((old_row, old_col), _, _) => {
                 buf.cursor_row = *old_row;
                 buf.cursor_col = *old_col;
             }
