@@ -13,6 +13,8 @@ This projects completes my [Compiler](https://github.com/adam-mcdaniel/sage), [S
 - [Features](#features)
 - [Installation](#installation)
 - [Usage](#usage)
+    - [Keybindings](#keybindings)
+    - [Scripting](#scripting)
 - [Contributing](#contributing)
 - [License](#license)
 
