@@ -83,7 +83,7 @@ Here are some of the keybindings supported by lite:
 Lite has a builtin scripting language that can be used to extend its functionality. The scripting language is a simple lisp-like language that can be used to setup your editor and add new commands. Here's an example of a simple script that adds a new command to the editor:
 
 ```rs
-# In the "$HOME/.lite" file, add the following definition
+# In the "$HOME/config.lite" file, add the following definition
 
 # Add a command to duplicate the current selection
 # down one line
