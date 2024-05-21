@@ -2,7 +2,7 @@
 
 ![Header](assets/header.png)
 
-A lightweight and extensible text editor for the terminal with a custom scripting language, implemented in a few thousand lines of Rust. I created this project to learn more about text editors and to experiment with building a simple editor from scratch!
+Lite is a lightweight and extensible text editor for the terminal with a custom scripting language, implemented in a few thousand lines of Rust. I created this project to learn more about text editors and to experiment with building a simple editor from scratch!
 
 I also wanted to explore the idea of a tiny core editor with a scripting language used to facilitate highly customized editing workflows.
 
