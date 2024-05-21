@@ -6,7 +6,7 @@ Lite is a lightweight and extensible text editor for the terminal with a custom 
 
 I also wanted to explore the idea of a tiny core editor with a scripting language used to facilitate highly customized editing workflows.
 
-This project completes my [Compiler](https://github.com/adam-mcdaniel/sage), [Shell](https://github.com/adam-mcdaniel/dune), and [Text Editor](https://github.com/adam-mcdaniel/lite) trifecta! All that's left is to port these projects to [my Operating System](https://github.com/adam-mcdaniel/sage-os)!
+This project completes my [Compiler](https://github.com/adam-mcdaniel/sage), [Shell](https://github.com/adam-mcdaniel/dune), and [Text Editor](https://github.com/adam-mcdaniel/lite) trifecta🏅! All that's left is to port these projects to [my Operating System](https://github.com/adam-mcdaniel/sage-os)!
 
 ## Table of Contents
 
