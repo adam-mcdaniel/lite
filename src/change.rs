@@ -61,7 +61,7 @@ impl Change {
                 if buf.cur_pos() == old_pos {
                     buf.undo_stack.push(Self::Move(old_pos, Direction::Nowhere, *count));
                 } else {
-                    buf.undo_stack.push(self.clone());
+                    buf.undo_stack.push(Self::Move(old_pos, Direction::Nowhere, *count));
                 }
             }
             Self::Goto((old_row, old_col), (new_row, new_col)) => {
